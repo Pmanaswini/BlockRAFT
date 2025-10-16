@@ -17,8 +17,10 @@ using json = nlohmann::json;
 using namespace std;
 namespace logging = boost::log;
 namespace keywords = boost::log::keywords;
+bool flag=false;
 
 struct Record {
+  string operation;
   string address;
   string data;
 };
@@ -53,14 +55,21 @@ vector<Record> readJsonFile(const string& filename) {
   }
 
   json j;
-  file >> j;
+  try {
+    file >> j;
+    for (const auto& item : j) {
+      Record rec;
+      rec.operation = item.at("operation").get<string>();
+      rec.address = item.at("address").get<string>();
+      rec.data = item.at("data").get<string>();
+      records.push_back(rec);
+    }
+} catch (const json::parse_error& e) {
+    std::cerr << "Parse error at byte " << e.byte << ": " << e.what() << "\n";
+    return records;
+}
 
-  for (const auto& item : j) {
-    Record rec;
-    rec.address = item.at("address").get<string>();
-    rec.data = item.at("data").get<string>();
-    records.push_back(rec);
-  }
+ 
 
   return records;
 }
@@ -68,12 +77,18 @@ vector<Record> readJsonFile(const string& filename) {
 void expCount(const string& filename, int threadCount) {
   vector<Record> records = readJsonFile(filename);
 
+  if(!flag){
   // Serial Insert and Timing
   auto start = chrono::high_resolution_clock::now();
   {
     serialMerkleTree serialState;
     for (const auto& rec : records) {
-      serialState.insert(rec.address, rec.data);
+      // serialState.insert(rec.address, rec.data);
+      if (rec.operation == "read") {
+        serialState.getValue(rec.address);
+    } else {
+        serialState.insert(rec.address, rec.data);
+    }
     }
     deleteRocksDB("merkleTree");
   }
@@ -83,11 +98,11 @@ void expCount(const string& filename, int threadCount) {
   BOOST_LOG_TRIVIAL(info) << "Updated " << records.size()
                           << " records into serialState in " << duration.count()
                           << " seconds.";
-
+  }
   parallelMerkleTree parallelState;
 
   // Parallel Update
-  start = chrono::high_resolution_clock::now();
+  auto start2 = chrono::high_resolution_clock::now();
 
   vector<thread> threads(threadCount);
   size_t totalRecords = records.size();
@@ -100,8 +115,12 @@ void expCount(const string& filename, int threadCount) {
 
     threads[i] = thread([startIdx, endIdx, &records, &parallelState]() {
       for (size_t j = startIdx; j < endIdx; j++) {
+    if (records[j].operation == "read") {
+        parallelState.getValue(records[j].address);
+    } else {
         parallelState.updateValue(records[j].address, records[j].data);
-      }
+    }
+}
     });
   }
 
@@ -110,15 +129,17 @@ void expCount(const string& filename, int threadCount) {
       threads[i].join();
     }
   }
+  std::cout << "Map size: " << parallelState.myMap.size() << "\n";
+
   parallelState.parallelInsertFromMap(threadCount);
   deleteRocksDB("merkleTree");
 
-  end = chrono::high_resolution_clock::now();
-  duration = end - start;
+  auto end2 = chrono::high_resolution_clock::now();
+  chrono::duration<double> duration2 = end2 - start2;
 
   BOOST_LOG_TRIVIAL(info) << "Updated " << records.size()
                           << " records in parallelState using " << threadCount
-                          << " threads in " << duration.count() << " seconds.";
+                          << " threads in " << duration2.count() << " seconds.";
 }
 
 void expCountForAllFiles(int threadCount) {
@@ -164,6 +185,7 @@ void expThreadForAllFiles() {
         BOOST_LOG_TRIVIAL(info)
             << "Running experiment with " << tc << " threads.";
         expCount(filename, tc);
+        flag=true;
       }
     }
   }

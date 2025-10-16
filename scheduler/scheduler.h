@@ -208,7 +208,7 @@ void reset() {
         }
       }
       int txnId = dag.selectTxn();
-      cout<<"selected: "<<txnId<<endl;
+      cout<<"selected: "<<txnId<<" "<<dag.completedTxns<<" "<<dag.totalTxns<<endl;
       if (txnId != -1) {
         transaction::Transaction txn =
             transactions[txnId];  // Directly use txnId to get the transaction
