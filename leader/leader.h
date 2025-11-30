@@ -286,9 +286,11 @@ bool leaderProtocol(string raftTerm, int txnCount, int thCount, string mode, int
   // Block generation
   if (count % 2 == 0) {
       BOOST_LOG_TRIVIAL(info) << "Setup File is running (even count)." << count;
+      cout << "Setup File is running (even count)." << count;
       latestBlock = producer.produce(db, txnCount, "../leader/setupFile.txt");
   } else {
       BOOST_LOG_TRIVIAL(info) << "Test File is running (odd count)." << count;
+      cout<< "Test File is running (odd count)." << count;
       latestBlock = producer.produce(db, txnCount, "../leader/testFile.txt");
   }
 
@@ -321,6 +323,7 @@ bool leaderProtocol(string raftTerm, int txnCount, int thCount, string mode, int
       compKey = base_path + "/components";
       runKey = base_path + "/run";
       commitKey = base_path + "/commit";
+      cout<<"Base path: "<<base_path<<endl;
 
       auto etcd_block_start = std::chrono::high_resolution_clock::now();
       response = etcdClient.set(blockKey, serializedBlock).get();
@@ -349,11 +352,12 @@ bool leaderProtocol(string raftTerm, int txnCount, int thCount, string mode, int
               << " ms";
     
   });
-
+  
   std::thread t2([&]() {
       dagS = std::chrono::high_resolution_clock::now();
       DAG = DAGObj.create(latestBlock, thCount);
       txnCount = DAGObj.totalTxns;
+      cout<<"Total Txns: "<<DAGObj.totalTxns<<endl;
       dagC = std::chrono::high_resolution_clock::now();
 
       table = DAGObj.connectedComponents();
