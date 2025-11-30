@@ -317,6 +317,7 @@ class follower {
       }
       BOOST_LOG_TRIVIAL(info)
           << "Component " << component_id << " marked as done.";
+          cout<< "Component " << component_id << " marked as done.";
       return true;
     } catch (const std::exception& e) {
       BOOST_LOG_TRIVIAL(error)
@@ -369,12 +370,14 @@ class follower {
 
   string startBlock(const std::string& leader_id, const std::string& term_no,
                     int block_num, int thCount, int clusterSize) {
+    
     stopWatcher.store(false);  // Reset before starting
-
+    // cout << "follower started: "<<leader_id<<" "<<term_no<<" "<<block_num<<endl;
     watchLeaderCrash();  // Start watching
     auto start = std::chrono::high_resolution_clock::now();
     string serializedBlock = readBlock(leader_id, term_no, block_num);
     BOOST_LOG_TRIVIAL(info) << "dag is created";
+    // cout << "dag is created:"<<Scheduler.dag.totalTxns;
 
     if (Scheduler.dag.totalTxns <= 0 || Scheduler.dag.totalTxns > 10000) {
       BOOST_LOG_TRIVIAL(error) << "Error: Invalid DAG transaction count: "

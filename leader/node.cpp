@@ -189,11 +189,10 @@ int main() {
 
   int threadCount = configJson["threadCount"];
   int txnCount = configJson["txnCount"];
-  int blocksCount = configJson["blocks"];
+  int count=0, blocksCount = configJson["blocks"];
   std::string schedulerMode = configJson["scheduler"];
   std::string executionMode = configJson["mode"];
-  executeCommand("etcdctl del \"\" --prefix");
-  int count=0;
+  // executeCommand("etcdctl del \"\" --prefix");
 
   while (etcdHealth.load() && redpandaHealth.load() && count< blocksCount) {
     if (leaderObj.nodeDetails()) {
@@ -206,7 +205,10 @@ int main() {
 
         bool status = leaderObj.leaderProtocol(raftTerm, txnCount, threadCount,
                                                executionMode, count);
+
+        if (status) {
           count++;
+        }
       } else {
         // Follower branch:
         follower f;
