@@ -72,7 +72,25 @@ void reset() {
   myMap.clear();  // TBB's concurrent_hash_map supports clear()
 }
 
+  // Serializes and stores shared map state to etcd
+  string sendData() {
+    addressList::AddressValueList protoList;
 
+    // Build the protobuf message from the map
+    for (const auto& kv : myMap) {
+        addressList::AddressValue* pair = protoList.add_pairs();
+        pair->set_address(kv.first);
+        pair->set_value(kv.second);
+    }
+
+    // Serialize to string
+    std::string serializedData;
+    if (!protoList.SerializeToString(&serializedData)) {
+        std::cerr << "Failed to serialize AddressValueList!" << std::endl;
+        return serializedData;
+    }
+return serializedData;
+}
   // Serializes and stores shared map state to etcd
   void dataStore(const std::string& path) {
     addressList::AddressValueList protoList;

@@ -10,10 +10,12 @@
 #include <vector>
 #include <cstring>
 #include <sys/socket.h>
+#include "addressList.pb.h"
 inline std::string node_ip, node_id;
 inline etcd::Client etcdClient("http://127.0.0.1:2379");
 inline etcd::Client etcdClientWallet("http://127.0.0.1:2379");
 
+atomic<int> dataCounter;
 ssize_t send_all(int fd, const char* buf, size_t len) {
     size_t total = 0;
     while (total < len) {
@@ -83,7 +85,36 @@ bool read_until_close(int fd, std::string &out) {
     return true;
 }
 
-void server_loop(int port, int thread_id) {
+std::string MergeSerializedAddressLists(vector<std::string>& serializedLists)
+{
+    addressList::AddressValueList finalList;
+
+    for (size_t i = 0; i < serializedLists.size(); ++i) {
+        const std::string& blob = serializedLists[i];
+
+        addressList::AddressValueList temp;
+        if (!temp.ParseFromString(blob)) {
+            std::cerr << "Failed to parse protobuf element at index " << i << std::endl;
+            return "";   // Abort: one or more blobs is invalid
+        }
+
+        // Append all AddressValue entries
+        for (const auto& entry : temp.pairs()) {
+            *finalList.add_pairs() = entry;
+        }
+    }
+
+    // Serialize final combined result
+    std::string output;
+    if (!finalList.SerializeToString(&output)) {
+        std::cerr << "Failed to serialize merged AddressValueList\n";
+        return "";
+    }
+
+    return output;
+}
+
+void server_loop(int port, int thread_id,int clusterSize, std::vector<std::string>* sharedStrings) {
     int server_fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) {
         std::cerr << "Thread " << thread_id << " - socket() failed: " << strerror(errno) << "\n";
@@ -140,16 +171,19 @@ void server_loop(int port, int thread_id) {
 
     std::cout << "Thread " << thread_id << " - Received on port "
               << port << " (" << received.size() << " bytes): ";
+              (*sharedStrings)[thread_id] =received;
+              dataCounter++;
     if (received.size() <= 200) {
         std::cout << received << "\n";
     } else {
         std::cout << "<" << received.size() << " bytes>\n";
     }
-
+    while(dataCounter<clusterSize-1){}
     // Prepare reply "goodmrg" using length-prefixed framing
-    // const std::string reply = "goodmrg";
+    
+    const std::string reply = MergeSerializedAddressLists(*sharedStrings);
     // Example large reply: 300,000 bytes
-    std::string reply(300000, 'Z');   // Or any data you want
+    // std::string reply(300000, 'Z');   // Or any data you want
 
     uint32_t reply_len = static_cast<uint32_t>(reply.size());
     uint32_t reply_be = htonl(reply_len);
@@ -178,13 +212,14 @@ void server_loop(int port, int thread_id) {
 void server(int id, int clusterSize) {
     
     std::vector<std::thread> threads;
+    std::vector<std::string> sharedStrings(clusterSize);
     threads.reserve(clusterSize-1);
 
     // Start all server threads
     for (int i = 0; i < clusterSize; ++i) {
         if(id!=i){
         int port = 8080 + i;
-        threads.emplace_back(server_loop, port, i);}
+        threads.emplace_back(server_loop, port, i,clusterSize,&sharedStrings);}
     }
 
     std::cout << "Started " << clusterSize << " server threads on ports "
@@ -199,7 +234,7 @@ void server(int id, int clusterSize) {
 
 // Client: sends one length-prefixed message (handles large payloads) and reads the length-prefixed reply.
 // If you need to talk to an old server that doesn't use length prefix, use the older plain send() version.
-void client(int port) {
+void client(int port,string payload) {
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) { perror("socket"); return; }
 
@@ -222,7 +257,7 @@ void client(int port) {
 
     // Example payload: replace with your big payload (300000 bytes)
     // std::string payload = "hello";
-    std::string payload(300000, 'A'); // uncomment to test 300k of 'A'
+    // std::string payload(300000, 'A'); // uncomment to test 300k of 'A'
 
     // Send length prefix header (4 bytes big-endian)
     uint32_t len = static_cast<uint32_t>(payload.size());
