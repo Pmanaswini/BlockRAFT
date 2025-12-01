@@ -398,9 +398,8 @@ class follower {
                                          std::to_string(block_num) + "/commit")
                                     .get();
       string dataToSend= Scheduler.sendData();
-      client(8080+stoi(node_id.substr(1)),dataToSend);
-      saveData(leader_id + "/" + term_no + "/" + std::to_string(block_num),
-                 clusterSize);
+     string dataReceived =  client(8080+stoi(node_id.substr(1)),dataToSend);
+      saveData(dataReceived);
                  Scheduler.reset();  // Reset scheduler state after execution
 
                                     if (!flag) {
@@ -495,28 +494,27 @@ class follower {
     return updatedKeys;
 }
 
-void saveData(const std::string& path, int clusterSize) {
+void saveData(const std::string& receivedData) {
     std::vector<std::thread> threads;
-    std::vector<std::string> results(clusterSize);
-cout<< "Saving data from path: " << path << std::endl;
-  cout << "Cluster size: " << clusterSize << std::endl;
-  
-    for (int i = 0; i < clusterSize; ++i) {
-        threads.emplace_back([&, i]() {
-        results[i] = fetchAndParseKeys(path, i, state);
-});
-
+    
+    addressList::AddressValueList protoList;
+    if (!protoList.ParseFromString(receivedData)) {
+        std::cerr << "Failed to parse protobuf for node " << std::endl;
+        return ;
     }
 
-    for (auto& t : threads) {
-        t.join();
+    // Insert into state and collect updated keys
+    std::string updatedKeys;
+    for (const auto& pair : protoList.pairs()) {
+        const std::string& key = pair.address();
+        const std::string& val = pair.value();
+
+        state.insert(key, val);
+        updatedKeys += key + " ";
     }
-    std::string allUpdatedKeys="";
-    for (const auto& result : results) {
-        allUpdatedKeys += result + " ";
-    }
+
 
     // Update the global state tree
-    state.updateTree(allUpdatedKeys);
+    state.updateTree(updatedKeys);
 }
 };

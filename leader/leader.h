@@ -209,53 +209,64 @@ class leader {
     return false;
   }
 
-  std::string fetchAndParseKeys(const std::string& path, int nodeIndex, GlobalState& state) {
-    std::string fullPath = path + "/s" + std::to_string(nodeIndex)+"/data";
-    cout << "Fetching data at path: " << fullPath << std::endl;
+  std::string fetchAndParseKeys(
+    const addressList::AddressValueList& protoList,
+    size_t start, size_t end,
+    GlobalState& state) {
 
-    // Fetch the data from etcd
-    auto response = etcdClient.get(fullPath).get();
-    if (!response.is_ok()) {
-        std::cerr << "Failed to fetch from etcd for node " << nodeIndex << std::endl;
-        return "";
-    }
-
-    std::string value = response.value().as_string();
-
-    // Parse the protobuf
-    addressList::AddressValueList protoList;
-    if (!protoList.ParseFromString(value)) {
-        std::cerr << "Failed to parse protobuf for node " << nodeIndex << std::endl;
-        return "";
-    }
-
-    // Insert into state and collect updated keys
-    std::string updatedKeys;
-    for (const auto& pair : protoList.pairs()) {
-        const std::string& key = pair.address();
-        const std::string& val = pair.value();
-
-        state.insert(key, val);
-        updatedKeys += key + " ";
-    }
-
-    return updatedKeys;
+      std::string updatedKeys;
+      std::vector<std::pair<std::string, std::string>> localInserts;
+      localInserts.reserve(end - start);
+  
+      for (size_t i = start; i < end; ++i) {
+          const auto& pair = protoList.pairs(i);
+          localInserts.emplace_back(pair.address(), pair.value());
+  
+          updatedKeys += localInserts.back().first;
+          updatedKeys.push_back(' ');
+      }
+  
+      // One lock to move the batch into shared state
+      {
+          for (auto& kv : localInserts) {
+              state.insert(kv.first, kv.second);
+          }
+      }
+  
+      return updatedKeys;
 }
 
 
-void saveData(const std::string& path, int clusterSize) {
+void saveData(string receivdeData, int thCount) {
     std::vector<std::thread> threads;
     GlobalState state;
-    std::vector<std::string> results(clusterSize);
+    std::vector<std::string> results(thCount);
 
-    for (int i = 0; i < clusterSize; ++i) {
-        threads.emplace_back(
-            [&, i]() { results[i] = fetchAndParseKeys(path, i, state); });
+    addressList::AddressValueList protoList;
+    if (!protoList.ParseFromString(receivdeData)) {
+        std::cerr << "Failed to parse protobuf for node " << std::endl;
+        return;
     }
+    const size_t total = protoList.pairs_size();
+    if (total == 0) return;
+    const size_t chunk = (total + thCount - 1) / thCount;
 
-    for (auto& t : threads) {
-        t.join();
-    }
+    for (size_t t = 0; t < thCount; ++t) {
+      const size_t start = t * chunk;
+      const size_t end = std::min(start + chunk, total);
+      if (start >= end) {
+          results[t] = "";
+          continue;
+      }
+
+      threads.emplace_back(
+          [&, t, start, end]() {
+              results[t] = fetchAndParseKeys(protoList, start, end, state);
+          }
+      );
+  }
+
+  for (auto& th : threads) th.join();
 
     std::string allUpdatedKeys;
     for (const auto& result : results) {
@@ -385,7 +396,8 @@ bool leaderProtocol(string raftTerm, int txnCount, int thCount, string mode, int
       auto etcd_run_start_start = std::chrono::high_resolution_clock::now();
       response = etcdClient.set(runKey, "start").get();
       auto etcd_run_start_end = std::chrono::high_resolution_clock::now();
-
+      dataCounter=0;
+      string receivdeData = server(stoi(node_id.substr(1)),memberList.size());
       BOOST_LOG_TRIVIAL(info)
           << "ETCD write (run=start): "
           << std::chrono::duration_cast<std::chrono::milliseconds>(etcd_run_start_end - etcd_run_start_start).count()
@@ -410,10 +422,9 @@ bool leaderProtocol(string raftTerm, int txnCount, int thCount, string mode, int
           << "ETCD write (commit=1): "
           << std::chrono::duration_cast<std::chrono::milliseconds>(etcd_commit1_end - etcd_commit1_start).count()
           << " ms";
-
+          
       exeE = std::chrono::high_resolution_clock::now();
-      server(stoi(node_id.substr(1)),memberList.size());
-      saveData(base_path, memberList.size());
+      saveData(receivdeData,thCount);
       db.storeBlock("B" + to_string(header.block_num()), serializedBlock);
 
       end = std::chrono::high_resolution_clock::now();

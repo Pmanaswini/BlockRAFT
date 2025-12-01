@@ -209,7 +209,7 @@ void server_loop(int port, int thread_id,int clusterSize, std::vector<std::strin
 }
 
 
-void server(int id, int clusterSize) {
+string server(int id, int clusterSize) {
     
     std::vector<std::thread> threads;
     std::vector<std::string> sharedStrings(clusterSize);
@@ -229,14 +229,16 @@ void server(int id, int clusterSize) {
     for (auto& t : threads) {
         t.join();
     }
+    const std::string reply = MergeSerializedAddressLists(sharedStrings);
+    return reply;
 }
 
 
 // Client: sends one length-prefixed message (handles large payloads) and reads the length-prefixed reply.
 // If you need to talk to an old server that doesn't use length prefix, use the older plain send() version.
-void client(int port,string payload) {
+string client(int port,string payload) {
     int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) { perror("socket"); return; }
+    if (sock < 0) { perror("socket"); return " "; }
 
     sockaddr_in serv_addr{};
     serv_addr.sin_family = AF_INET;
@@ -246,13 +248,13 @@ void client(int port,string payload) {
     if (inet_pton(AF_INET, "10.227.214.187", &serv_addr.sin_addr) != 1) {
         std::cerr << "inet_pton failed\n";
         close(sock);
-        return;
+        return " ";
     }
 
     if (connect(sock, (sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
         std::cerr << "connect failed: " << strerror(errno) << "\n";
         close(sock);
-        return;
+        return " ";
     }
 
     // Example payload: replace with your big payload (300000 bytes)
@@ -265,7 +267,7 @@ void client(int port,string payload) {
     if (send_all(sock, reinterpret_cast<const char*>(&be), sizeof(be)) < 0) {
         std::cerr << "send header failed: " << strerror(errno) << "\n";
         close(sock);
-        return;
+        return " ";
     }
 
     // Send payload (looped)
@@ -273,7 +275,7 @@ void client(int port,string payload) {
         if (send_all(sock, payload.data(), payload.size()) < 0) {
             std::cerr << "send payload failed: " << strerror(errno) << "\n";
             close(sock);
-            return;
+            return " ";
         }
     }
 
@@ -283,7 +285,7 @@ void client(int port,string payload) {
     if (n <= 0 || static_cast<size_t>(n) < sizeof(reply_be)) {
         std::cerr << "failed to read reply header\n";
         close(sock);
-        return;
+        return " ";
     }
     uint32_t reply_len = ntohl(reply_be);
     std::string reply;
@@ -292,10 +294,11 @@ void client(int port,string payload) {
     if (m < 0 || static_cast<uint32_t>(m) != reply_len) {
         std::cerr << "failed to read full reply\n";
         close(sock);
-        return;
+        return " ";
     }
 
     std::cout << "Client received reply (" << reply_len << " bytes): " << "\n";
 
     close(sock);
+    return reply;
 }

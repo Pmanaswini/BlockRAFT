@@ -211,8 +211,7 @@ return serializedData;
 
     while ((!completeFlag.load()) && flag.load()) {
       if (dag.completedTxns == dag.totalTxns && updateFlag) {
-        dataStore(leader_id + "/" + term_no + "/" + std::to_string(block_num) +"/"+node_id+
-                  "/data");
+        // dataStore(leader_id + "/" + term_no + "/" + std::to_string(block_num) +"/"+node_id+"/data");
         std::string comp_key = leader_id + "/" + term_no + "/" +
                                std::to_string(block_num) +
                                "/components/status" + "/" + node_id;
