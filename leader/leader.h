@@ -412,7 +412,7 @@ bool leaderProtocol(string raftTerm, int txnCount, int thCount, string mode, int
           << " ms";
 
       exeE = std::chrono::high_resolution_clock::now();
-
+      server(stoi(node_id.substr(1)),memberList.size());
       saveData(base_path, memberList.size());
       db.storeBlock("B" + to_string(header.block_num()), serializedBlock);
 

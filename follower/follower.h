@@ -397,7 +397,7 @@ class follower {
                                     .get(leader_id + "/" + term_no + "/" +
                                          std::to_string(block_num) + "/commit")
                                     .get();
-      
+      client(8080+stoi(node_id.substr(1)));
       saveData(leader_id + "/" + term_no + "/" + std::to_string(block_num),
                  clusterSize);
                  Scheduler.reset();  // Reset scheduler state after execution
