@@ -396,8 +396,7 @@ bool leaderProtocol(string raftTerm, int txnCount, int thCount, string mode, int
       auto etcd_run_start_start = std::chrono::high_resolution_clock::now();
       response = etcdClient.set(runKey, "start").get();
       auto etcd_run_start_end = std::chrono::high_resolution_clock::now();
-      dataCounter=0;
-      string receivdeData = server(stoi(node_id.substr(1)),memberList.size());
+
       BOOST_LOG_TRIVIAL(info)
           << "ETCD write (run=start): "
           << std::chrono::duration_cast<std::chrono::milliseconds>(etcd_run_start_end - etcd_run_start_start).count()
@@ -424,6 +423,8 @@ bool leaderProtocol(string raftTerm, int txnCount, int thCount, string mode, int
           << " ms";
           
       exeE = std::chrono::high_resolution_clock::now();
+      dataCounter=0;
+      string receivdeData = server(stoi(node_id.substr(1)),memberList.size());
       saveData(receivdeData,thCount);
       db.storeBlock("B" + to_string(header.block_num()), serializedBlock);
 
