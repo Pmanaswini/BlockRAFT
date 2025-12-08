@@ -177,7 +177,7 @@ int main() {
   etcd::Response response;
   thread etcdMonitor, leaderLease, redpandaMonitor;
   etcdMonitor = thread(&etcdMonitorFunc);
-  redpandaMonitor = thread(&redpandaMonitorFunc);
+  //redpandaMonitor = thread(&redpandaMonitorFunc);
   std::ifstream configFile("../config.json");
   if (!configFile.is_open()) {
     BOOST_LOG_TRIVIAL(error) << "Failed to open config.json";
@@ -257,7 +257,7 @@ int main() {
   }
   leaderObj.db.destroyDB();
   etcdMonitor.join();
-  redpandaMonitor.join();
+  //redpandaMonitor.join();
   if (findLeader()) {
     leaderLease.join();
   }

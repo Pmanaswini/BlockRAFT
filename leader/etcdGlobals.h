@@ -245,7 +245,7 @@ string client(int port,string payload) {
     serv_addr.sin_port = htons(port);
 
     // IP of node0 - keep your existing IP
-    if (inet_pton(AF_INET, "10.227.214.187", &serv_addr.sin_addr) != 1) {
+    if (inet_pton(AF_INET, "10.227.214.140", &serv_addr.sin_addr) != 1) {
         std::cerr << "inet_pton failed\n";
         close(sock);
         return " ";
