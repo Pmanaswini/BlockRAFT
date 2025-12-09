@@ -116,7 +116,7 @@ Run CMake to configure and build the project:
 
 ```bash
 cd
-cd Distributed_Framework
+cd BlockRAFT
 mkdir build
 cd build
 cmake ..
@@ -129,6 +129,7 @@ make
 
 ```bash
 ctest
+./node
 ```
 
 ### Test the RestAPI Module
